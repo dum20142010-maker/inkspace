@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { User } from '../../types/notebook';
 import {
   X,
@@ -11,7 +11,10 @@ import {
   Shield,
   Palette,
   Briefcase,
-  FileText
+  FileText,
+  Upload,
+  Trash2,
+  Camera
 } from 'lucide-react';
 
 interface UserProfileModalProps {
@@ -45,13 +48,27 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const [bio, setBio] = useState(currentUser.bio || '');
   const [workplace, setWorkplace] = useState(currentUser.workplace || '');
   const [avatarColor, setAvatarColor] = useState(currentUser.avatarColor || '#f59e0b');
+  const [avatarImage, setAvatarImage] = useState(currentUser.avatarImage || '');
   const [emailVisibility, setEmailVisibility] = useState<'public' | 'connections' | 'private'>(
     currentUser.emailVisibility || 'public'
   );
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (typeof event.target?.result === 'string') {
+        setAvatarImage(event.target.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,6 +86,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           bio,
           workplace,
           avatarColor,
+          avatarImage,
           emailVisibility
         })
       }).then(r => r.json());
@@ -91,20 +109,24 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4 animate-in fade-in">
       <div className="w-full max-w-lg rounded-3xl bg-[#0c1017] border border-slate-800 p-6 shadow-2xl text-slate-100 flex flex-col max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
             <div
-              className="w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-slate-950 text-base shadow-md"
-              style={{ backgroundColor: avatarColor }}
+              className="w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-slate-950 text-base shadow-md overflow-hidden relative"
+              style={{ backgroundColor: avatarImage ? 'transparent' : avatarColor }}
             >
-              {name[0]?.toUpperCase() || 'U'}
+              {avatarImage ? (
+                <img src={avatarImage} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                <span>{name[0]?.toUpperCase() || 'U'}</span>
+              )}
             </div>
             <div>
               <h2 className="font-serif text-lg font-bold text-white">Edit User Profile</h2>
-              <p className="text-xs text-slate-400">Customize your public card, username, and privacy</p>
+              <p className="text-xs text-slate-400">Upload profile photo, customize name & bio</p>
             </div>
           </div>
           <button
@@ -130,11 +152,66 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
         {/* Form */}
         <form onSubmit={handleSave} className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-4 my-4">
-          {/* Avatar Color Selection */}
+          {/* Custom Profile Photo Upload */}
+          <div className="p-4 rounded-2xl bg-[#111622] border border-slate-800 space-y-3">
+            <label className="block text-xs font-bold text-white flex items-center gap-1.5">
+              <Camera className="w-4 h-4 text-amber-400" />
+              <span>Custom Profile Photo</span>
+            </label>
+
+            <div className="flex items-center gap-4">
+              <div
+                className="w-16 h-16 rounded-2xl border-2 border-slate-700 flex items-center justify-center overflow-hidden bg-slate-900 shadow-inner shrink-0"
+                style={{ backgroundColor: avatarImage ? 'transparent' : avatarColor }}
+              >
+                {avatarImage ? (
+                  <img src={avatarImage} alt="Avatar Preview" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-xl font-bold text-slate-950">{name[0]?.toUpperCase() || 'U'}</span>
+                )}
+              </div>
+
+              <div className="space-y-2 flex-1">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImageUpload}
+                  accept="image/*"
+                  className="hidden"
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition shadow-md"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Upload Photo</span>
+                  </button>
+
+                  {avatarImage && (
+                    <button
+                      type="button"
+                      onClick={() => setAvatarImage('')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 font-semibold text-xs transition"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Remove</span>
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Upload any JPG, PNG or WebP photo to use as your profile picture.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Avatar Color Selection (Fallback) */}
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5">
               <Palette className="w-3.5 h-3.5 text-amber-400" />
-              <span>Profile Badge Color</span>
+              <span>Badge Color (When no photo is used)</span>
             </label>
             <div className="flex items-center gap-2.5">
               {AVATAR_COLORS.map(color => (

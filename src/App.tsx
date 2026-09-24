@@ -17,7 +17,30 @@ export default function App() {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [activeNotebookPages, setActiveNotebookPages] = useState<NotebookPage[]>([]);
   const [editorInitialPageIndex, setEditorInitialPageIndex] = useState(0);
-  const [toolSettings, setToolSettings] = useState<ToolSettings | null>(null);
+  const [toolSettings, setToolSettings] = useState<ToolSettings>({
+    activeTool: 'fountain',
+    appTheme: 'dark',
+    penColor: '#0f172a',
+    penWidth: 3,
+    penOpacity: 1.0,
+    penPresets: [],
+    activePresetId: null,
+    highlighterColor: '#fde047',
+    highlighterWidth: 20,
+    eraserType: 'pixel',
+    eraserSize: 32,
+    shapeType: 'rectangle',
+    shapeFill: 'transparent',
+    shapeStroke: '#3b82f6',
+    shapeWidth: 2,
+    autoShapeRecognition: false,
+    palmRejection: true,
+    pressureSensitivity: true,
+    textColor: '#0f172a',
+    fontSize: 20,
+    fontFamily: 'Plus Jakarta Sans',
+    favoriteColors: ['#0f172a', '#2563eb', '#dc2626', '#16a34a', '#d97706', '#9333ea', '#db2777']
+  });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Authentication State
@@ -91,6 +114,16 @@ export default function App() {
   const handleOpenAuth = (mode: 'signin' | 'register' | 'recover') => {
     setAuthModalMode(mode);
     setIsAuthModalOpen(true);
+  };
+
+  const handleToggleTheme = async () => {
+    const nextTheme = (toolSettings.appTheme || 'dark') === 'dark' ? 'light' : 'dark';
+    const updated: ToolSettings = {
+      ...toolSettings,
+      appTheme: nextTheme
+    };
+    setToolSettings(updated);
+    await db.settings.put({ id: 'user_settings', data: updated });
   };
 
   /**
@@ -265,13 +298,24 @@ export default function App() {
     );
   }
 
+  const appTheme = toolSettings?.appTheme || 'dark';
+
   return (
-    <div className="h-screen w-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
+    <div className={`h-screen w-screen font-sans overflow-hidden ${
+      appTheme === 'light' ? 'bg-slate-100 text-slate-950' : 'bg-slate-950 text-slate-100'
+    }`}>
       {viewState === 'dashboard' ? (
         <Dashboard
           notebooks={notebooks}
           folders={folders}
           currentUser={currentUser}
+          currentTheme={appTheme}
+          toolSettings={toolSettings}
+          onUpdateSettings={async newSettings => {
+            setToolSettings(newSettings);
+            await db.settings.put({ id: 'user_settings', data: newSettings });
+          }}
+          onToggleTheme={handleToggleTheme}
           onOpenNotebook={handleOpenNotebook}
           onCreateNotebook={handleCreateNotebook}
           onFavoriteNotebook={handleFavoriteNotebook}
@@ -302,6 +346,8 @@ export default function App() {
           pages={activeNotebookPages}
           initialSettings={toolSettings}
           initialPageIndex={editorInitialPageIndex}
+          currentTheme={appTheme}
+          onToggleTheme={handleToggleTheme}
           onBackToDashboard={() => {
             setViewState('dashboard');
             loadAppData();

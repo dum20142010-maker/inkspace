@@ -69,6 +69,9 @@ interface ToolbarProps {
   onToggleDictation?: () => void;
   onOpenBookmarkModal?: () => void;
   isCurrentPageBookmarked?: boolean;
+  onOpenStylusShortcuts?: () => void;
+  currentTheme?: 'dark' | 'light';
+  onToggleTheme?: () => void;
 }
 
 const PEN_WIDTHS = [
@@ -117,7 +120,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onToggleCollaboration,
   onToggleDictation,
   onOpenBookmarkModal,
-  isCurrentPageBookmarked = false
+  isCurrentPageBookmarked = false,
+  onOpenStylusShortcuts,
+  currentTheme = 'dark',
+  onToggleTheme
 }) => {
   const [showEraserMenu, setShowEraserMenu] = useState(false);
   const [showShapeMenu, setShowShapeMenu] = useState(false);
@@ -444,6 +450,20 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               <span className="hidden xl:inline">{isCurrentPageBookmarked ? 'Bookmarked' : 'Bookmark'}</span>
             </button>
           )}
+
+          {/* Stylus Button Shortcuts Modal Trigger */}
+          {onOpenStylusShortcuts && (
+            <button
+              onClick={onOpenStylusShortcuts}
+              className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white hover:border-slate-700 transition"
+              title="Configure Stylus Pen Button Shortcuts"
+            >
+              <PenTool className="w-4 h-4 text-indigo-400" />
+              <span className="hidden xl:inline">Stylus</span>
+            </button>
+          )}
+
+
 
           {/* Handwriting OCR & Transcript */}
           <button

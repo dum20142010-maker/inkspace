@@ -205,8 +205,20 @@ export interface PenPreset {
   tool?: ToolType; // 'fountain' | 'pencil' | 'ballpoint' | 'marker' | 'brush'
 }
 
+export type AppTheme = 'dark' | 'light';
+
+export type StylusAction = 'none' | 'undo' | 'redo' | 'eraser' | 'highlighter' | 'laser' | 'select' | 'shape' | 'ocr' | 'bookmark';
+
+export interface StylusButtonShortcuts {
+  barrelButton1: StylusAction;
+  barrelButton2: StylusAction;
+  eraserSwitch: StylusAction;
+}
+
 export interface ToolSettings {
   activeTool: ToolType;
+  appTheme?: AppTheme;
+  stylusShortcuts?: StylusButtonShortcuts;
   penColor: string;
   penWidth: number;
   penOpacity: number; // 0.05 - 1.0 (defaults to 1.0)

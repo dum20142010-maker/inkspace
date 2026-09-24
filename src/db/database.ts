@@ -141,6 +141,12 @@ export async function initializeDatabase() {
   if (settingsCount === 0) {
     const defaultSettings: ToolSettings = {
       activeTool: 'fountain',
+      appTheme: 'dark',
+      stylusShortcuts: {
+        barrelButton1: 'eraser',
+        barrelButton2: 'select',
+        eraserSwitch: 'undo'
+      },
       penColor: '#0f172a',
       penWidth: 3,
       penOpacity: 1.0,

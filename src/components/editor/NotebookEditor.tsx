@@ -31,6 +31,7 @@ import { FindInNotebookModal } from './FindInNotebookModal';
 import { OcrTranscriptModal } from './OcrTranscriptModal';
 import { VoiceDictationBar } from './VoiceDictationBar';
 import { BookmarkPageModal } from './BookmarkPageModal';
+import { StylusShortcutsModal } from '../modals/StylusShortcutsModal';
 import { Check, Loader2 } from 'lucide-react';
 
 interface NotebookEditorProps {
@@ -38,6 +39,8 @@ interface NotebookEditorProps {
   pages: NotebookPage[];
   initialSettings: ToolSettings;
   initialPageIndex?: number;
+  currentTheme?: 'dark' | 'light';
+  onToggleTheme?: () => void;
   onBackToDashboard: () => void;
   onReloadNotebook: () => void;
 }
@@ -47,11 +50,19 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
   pages,
   initialSettings,
   initialPageIndex = 0,
+  currentTheme = 'dark',
+  onToggleTheme,
   onBackToDashboard,
   onReloadNotebook
 }) => {
   const [currentPageIndex, setCurrentPageIndex] = useState(initialPageIndex);
   const [settings, setSettings] = useState<ToolSettings>(initialSettings);
+
+  useEffect(() => {
+    if (currentTheme) {
+      setSettings(prev => ({ ...prev, appTheme: currentTheme }));
+    }
+  }, [currentTheme]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCollabPanelOpen, setIsCollabPanelOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -60,6 +71,7 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
   const [isOcrModalOpen, setIsOcrModalOpen] = useState(false);
   const [isSavePresetModalOpen, setIsSavePresetModalOpen] = useState(false);
   const [isManagePresetsModalOpen, setIsManagePresetsModalOpen] = useState(false);
+  const [isStylusModalOpen, setIsStylusModalOpen] = useState(false);
   const [zoomScale, setZoomScale] = useState(1.0);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
 
@@ -832,6 +844,9 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
           }
         }}
         isCurrentPageBookmarked={!!currentPage?.isBookmarked}
+        onOpenStylusShortcuts={() => setIsStylusModalOpen(true)}
+        currentTheme={currentTheme}
+        onToggleTheme={onToggleTheme}
       />
 
       {/* Main Workspace Body */}
@@ -1020,6 +1035,17 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
         onSelectPreset={handleSelectPreset}
         onUpdatePresets={handleUpdatePresets}
         onOpenSaveModal={() => setIsSavePresetModalOpen(true)}
+      />
+
+      {/* Stylus Button Shortcuts Modal */}
+      <StylusShortcutsModal
+        isOpen={isStylusModalOpen}
+        settings={settings}
+        onClose={() => setIsStylusModalOpen(false)}
+        onUpdateSettings={newSettings => {
+          setSettings(newSettings);
+          db.settings.put({ id: 'user_settings', data: newSettings }).catch(console.error);
+        }}
       />
 
       {/* Bookmark Page Modal */}

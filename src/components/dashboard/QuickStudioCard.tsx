@@ -3,6 +3,7 @@ import { PenTool, PlusCircle } from 'lucide-react';
 import { PaperType } from '../../types/notebook';
 
 interface QuickStudioCardProps {
+  currentTheme?: 'dark' | 'light';
   onCreateNotebook: (config: {
     title: string;
     coverColor: string;
@@ -28,10 +29,12 @@ const PAPER_GEOMETRIES: { id: PaperType; label: string }[] = [
   { id: 'graph', label: 'Hexagon' }
 ];
 
-export const QuickStudioCard: React.FC<QuickStudioCardProps> = ({ onCreateNotebook }) => {
+export const QuickStudioCard: React.FC<QuickStudioCardProps> = ({ currentTheme = 'dark', onCreateNotebook }) => {
   const [selectedSpine, setSelectedSpine] = useState<'cobalt' | 'obsidian' | 'kraft' | 'violet'>('cobalt');
   const [selectedPaper, setSelectedPaper] = useState<PaperType>('ruled');
   const [isInitializing, setIsInitializing] = useState(false);
+
+  const isLight = currentTheme === 'light';
 
   const handleInitialize = () => {
     setIsInitializing(true);
@@ -42,7 +45,7 @@ export const QuickStudioCard: React.FC<QuickStudioCardProps> = ({ onCreateNotebo
       title: `Folio — ${spineObj.label} ${paperObj.label.split(' ')[0]}`,
       coverColor: spineObj.color,
       paperType: selectedPaper,
-      paperColor: selectedPaper === 'ruled' || selectedPaper === 'dotted' ? '#fefcf0' : '#ffffff',
+      paperColor: selectedPaper === 'ruled' || selectedPaper === 'dotted' ? (isLight ? '#ffffff' : '#fefcf0') : '#ffffff',
       orientation: 'portrait',
       pageSize: 'A4',
       spineMaterial: selectedSpine
@@ -52,7 +55,9 @@ export const QuickStudioCard: React.FC<QuickStudioCardProps> = ({ onCreateNotebo
   };
 
   return (
-    <div className="relative flex flex-col justify-between rounded-2xl bg-[#0e131f] border border-slate-800/90 hover:border-slate-700/80 p-5 shadow-xl select-none min-h-[360px]">
+    <div className={`relative flex flex-col justify-between rounded-2xl ${
+      isLight ? 'bg-white border-slate-200 text-slate-900 shadow-md' : 'bg-[#0e131f] border-slate-800/90 text-slate-100 shadow-xl'
+    } border p-5 select-none min-h-[360px]`}>
       <div>
         {/* Top Badges */}
         <div className="flex items-center justify-between">
@@ -60,24 +65,24 @@ export const QuickStudioCard: React.FC<QuickStudioCardProps> = ({ onCreateNotebo
             <PenTool className="w-4 h-4" />
           </div>
 
-          <span className="text-[10px] font-mono font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20 tracking-wider">
+          <span className="text-[10px] font-mono font-bold text-amber-500 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20 tracking-wider">
             QUICK STUDIO
           </span>
         </div>
 
         {/* Title & Description */}
         <div className="mt-3">
-          <h3 className="font-serif text-xl font-bold text-white tracking-tight">
+          <h3 className={`font-serif text-xl font-bold ${isLight ? 'text-slate-900' : 'text-white'} tracking-tight`}>
             Create New Folio
           </h3>
-          <p className="text-xs text-slate-400 leading-relaxed mt-1">
+          <p className={`text-xs ${isLight ? 'text-slate-600' : 'text-slate-400'} leading-relaxed mt-1`}>
             Configure binding spine, paper grid grain, and launch high-fidelity ink workspace.
           </p>
         </div>
 
         {/* Spine Material Finish */}
         <div className="mt-4">
-          <span className="block text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase mb-1.5">
+          <span className={`block text-[10px] font-mono tracking-wider font-bold ${isLight ? 'text-slate-500' : 'text-slate-400'} uppercase mb-1.5`}>
             SPINE MATERIAL FINISH
           </span>
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -95,6 +100,8 @@ export const QuickStudioCard: React.FC<QuickStudioCardProps> = ({ onCreateNotebo
                       : spine.id === 'kraft'
                       ? 'bg-[#92400e] text-white font-bold shadow-md'
                       : 'bg-slate-700 text-white font-bold shadow-md'
+                    : isLight
+                    ? 'bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-200'
                     : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800'
                 }`}
               >
@@ -106,7 +113,7 @@ export const QuickStudioCard: React.FC<QuickStudioCardProps> = ({ onCreateNotebo
 
         {/* Paper Geometry */}
         <div className="mt-3">
-          <span className="block text-[10px] font-mono tracking-wider font-bold text-slate-400 uppercase mb-1.5">
+          <span className={`block text-[10px] font-mono tracking-wider font-bold ${isLight ? 'text-slate-500' : 'text-slate-400'} uppercase mb-1.5`}>
             PAPER GEOMETRY
           </span>
           <div className="grid grid-cols-2 gap-1.5">
@@ -117,7 +124,11 @@ export const QuickStudioCard: React.FC<QuickStudioCardProps> = ({ onCreateNotebo
                 onClick={() => setSelectedPaper(geom.id)}
                 className={`px-2.5 py-1.5 rounded-lg text-xs font-medium text-left transition border ${
                   selectedPaper === geom.id
-                    ? 'bg-slate-800 text-white border-slate-600 font-semibold'
+                    ? isLight
+                      ? 'bg-amber-50 text-amber-900 border-amber-300 font-semibold shadow-sm'
+                      : 'bg-slate-800 text-white border-slate-600 font-semibold'
+                    : isLight
+                    ? 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                     : 'bg-slate-900/80 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800/60'
                 }`}
               >
@@ -129,12 +140,12 @@ export const QuickStudioCard: React.FC<QuickStudioCardProps> = ({ onCreateNotebo
       </div>
 
       {/* Bind & Initialize Folio Button */}
-      <div className="mt-5 pt-3 border-t border-slate-800/80">
+      <div className={`mt-5 pt-3 border-t ${isLight ? 'border-slate-200' : 'border-slate-800/80'}`}>
         <button
           type="button"
           onClick={handleInitialize}
           disabled={isInitializing}
-          className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#c4b5fd] hover:bg-[#b8a5fc] text-slate-950 font-bold text-xs shadow-lg shadow-purple-500/10 transition active:scale-[0.98]"
+          className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs shadow-lg shadow-amber-400/20 transition active:scale-[0.98]"
         >
           <PlusCircle className="w-4 h-4" />
           <span>{isInitializing ? 'Binding Folio...' : 'Bind & Initialize Folio'}</span>

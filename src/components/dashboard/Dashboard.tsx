@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Notebook, Folder, SortOption, SortDirection, User, SearchResultItem } from '../../types/notebook';
+import { Notebook, Folder, SortOption, SortDirection, User, SearchResultItem, ToolSettings } from '../../types/notebook';
 import { NotebookCard } from './NotebookCard';
 import { QuickStudioCard } from './QuickStudioCard';
 import { CreateNotebookModal } from './CreateNotebookModal';
 import { ShareNotebookModal } from '../modals/ShareNotebookModal';
+import { StylusShortcutsModal } from '../modals/StylusShortcutsModal';
 import { FriendsModal } from '../social/FriendsModal';
 import { UserProfileModal } from '../auth/UserProfileModal';
 import { NotificationsModal } from '../modals/NotificationsModal';
@@ -29,13 +30,20 @@ import {
   FolderPlus,
   Users,
   Share2,
-  UserCheck
+  UserCheck,
+  Sun,
+  Moon,
+  PenTool
 } from 'lucide-react';
 
 interface DashboardProps {
   notebooks: Notebook[];
   folders: Folder[];
   currentUser: User | null;
+  currentTheme?: 'dark' | 'light';
+  toolSettings: ToolSettings;
+  onUpdateSettings: (newSettings: ToolSettings) => void;
+  onToggleTheme?: () => void;
   onOpenNotebook: (id: string, initialPageIndex?: number) => void;
   onCreateNotebook: (config: any) => void;
   onFavoriteNotebook: (id: string, isFav: boolean) => void;
@@ -65,6 +73,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
   notebooks,
   folders,
   currentUser,
+  currentTheme = 'dark',
+  toolSettings,
+  onUpdateSettings,
+  onToggleTheme,
   onOpenNotebook,
   onCreateNotebook,
   onFavoriteNotebook,
@@ -94,6 +106,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isNotificationsModalOpen, setIsNotificationsModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isStylusModalOpen, setIsStylusModalOpen] = useState(false);
   const [selectedNotebookForShare, setSelectedNotebookForShare] = useState<Notebook | null>(null);
 
   const [showFolderInput, setShowFolderInput] = useState(false);
@@ -101,6 +114,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [showUserDropdown, setShowUserDropdown] = useState(false);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const isLight = currentTheme === 'light';
 
   // Debounced search through titles and handwritten stroke OCR
   useEffect(() => {
@@ -445,6 +460,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <span className="hidden sm:inline">Friends</span>
             </button>
 
+            {/* Stylus Buttons Button */}
+            <button
+              onClick={() => setIsStylusModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#111622] border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 transition text-xs font-bold"
+              title="Configure Stylus Button Shortcuts"
+            >
+              <PenTool className="w-4 h-4 text-indigo-400" />
+              <span className="hidden sm:inline">Stylus Buttons</span>
+            </button>
+
             {/* Notification Bell */}
             <button
               onClick={() => setIsNotificationsModalOpen(true)}
@@ -454,6 +479,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <Bell className="w-4 h-4" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-[#0b0e16]" />
             </button>
+
+
 
             {/* + New Notebook Button */}
             <button
@@ -471,10 +498,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-xl hover:bg-[#111622] transition"
               >
                 <div
-                  className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs text-slate-950 shadow-sm"
-                  style={{ backgroundColor: currentUser?.avatarColor || '#f59e0b' }}
+                  className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs text-slate-950 shadow-sm overflow-hidden"
+                  style={{ backgroundColor: currentUser?.avatarImage ? 'transparent' : (currentUser?.avatarColor || '#f59e0b') }}
                 >
-                  {currentUser?.name?.[0]?.toUpperCase() || 'U'}
+                  {currentUser?.avatarImage ? (
+                    <img src={currentUser.avatarImage} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{currentUser?.name?.[0]?.toUpperCase() || 'U'}</span>
+                  )}
                 </div>
                 <div className="hidden lg:flex flex-col text-left">
                   <span className="text-xs font-bold text-white leading-tight">
@@ -696,6 +727,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
         onUpdateNotebook={updated => {
           // Update local state if needed
         }}
+      />
+
+      <StylusShortcutsModal
+        isOpen={isStylusModalOpen}
+        settings={toolSettings}
+        onClose={() => setIsStylusModalOpen(false)}
+        onUpdateSettings={onUpdateSettings}
       />
     </div>
   );
