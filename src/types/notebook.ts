@@ -179,6 +179,19 @@ export interface Notebook {
   isLocked?: boolean;
 }
 
+export interface NotebookAccessLog {
+  id: string;
+  notebookId: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userAvatarColor?: string;
+  userAvatarImage?: string;
+  openedAt: number;
+  lastActiveAt: number;
+  durationSeconds: number;
+}
+
 export interface PdfDocument {
   id: string;
   notebookId: string;
@@ -249,6 +262,7 @@ export interface User {
   name: string; // display name
   username: string; // unique handle e.g. "alex_ink"
   email: string;
+  collabCode?: string; // unique 6-digit friend/collaboration code e.g. "739201"
   bio?: string;
   workplace?: string;
   passwordHash: string;

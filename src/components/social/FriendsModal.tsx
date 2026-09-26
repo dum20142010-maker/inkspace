@@ -35,7 +35,7 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({
   const [outgoingRequests, setOutgoingRequests] = useState<FriendRequest[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<
-    { id: string; name: string; username: string; avatarColor: string; bio?: string; isFriend?: boolean }[]
+    { id: string; name: string; username: string; collabCode?: string; avatarColor: string; bio?: string; isFriend?: boolean }[]
   >([]);
   const [isSearching, setIsSearching] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
@@ -278,16 +278,21 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({
           {/* TAB 2: FIND PEOPLE */}
           {activeTab === 'find' && (
             <div className="space-y-4">
-              <div className="relative">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Search by username (@alex_ink) or display name..."
-                  autoFocus
-                  className="w-full rounded-2xl bg-[#111622] border border-slate-800 pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition"
-                />
+              <div>
+                <div className="relative">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Search by 6-digit Friend Code (e.g. 849201), @username, or Name..."
+                    autoFocus
+                    className="w-full rounded-2xl bg-[#111622] border border-slate-800 pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-500 mt-1.5 px-1">
+                  💡 Tip: You can search directly using your friend's creative 6-digit collaboration code.
+                </p>
               </div>
 
               {isSearching ? (
@@ -307,7 +312,14 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({
                           {u.name[0].toUpperCase()}
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-white">{u.name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs font-bold text-white">{u.name}</p>
+                            {u.collabCode && (
+                              <span className="px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300 font-mono text-[10px] font-extrabold">
+                                #{u.collabCode}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[11px] font-mono text-slate-400">@{u.username}</p>
                           {u.bio && <p className="text-[10px] text-slate-500 mt-0.5">{u.bio}</p>}
                         </div>
@@ -333,7 +345,7 @@ export const FriendsModal: React.FC<FriendsModalProps> = ({
                 <div className="py-8 text-center text-xs text-slate-400">No users found matching "{searchQuery}"</div>
               ) : (
                 <div className="py-6 text-center text-xs text-slate-500">
-                  Type a handle or name above to find collaborators.
+                  Type a 6-digit code, handle (@username), or name above to find collaborators.
                 </div>
               )}
             </div>

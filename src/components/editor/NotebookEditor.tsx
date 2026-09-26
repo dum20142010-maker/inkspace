@@ -9,10 +9,12 @@ import {
   ToolSettings,
   PenPreset,
   SelectionState,
-  User
+  User,
+  NotebookAccessLog
 } from '../../types/notebook';
 import { NotebookActivity, CollaboratorPresence } from '../../types/collaboration';
 import { db } from '../../db/database';
+import { auth } from '../../utils/firebase';
 import { Toolbar } from './Toolbar';
 import { PageThumbnailSidebar } from './PageThumbnailSidebar';
 import { CanvasWorkspace } from './CanvasWorkspace';
@@ -32,6 +34,8 @@ import { OcrTranscriptModal } from './OcrTranscriptModal';
 import { VoiceDictationBar } from './VoiceDictationBar';
 import { BookmarkPageModal } from './BookmarkPageModal';
 import { StylusShortcutsModal } from '../modals/StylusShortcutsModal';
+import { NotebookAnalyticsModal } from '../modals/NotebookAnalyticsModal';
+import { AIReaderPanel } from './AIReaderPanel';
 import { Check, Loader2 } from 'lucide-react';
 
 interface NotebookEditorProps {
@@ -72,11 +76,81 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
   const [isSavePresetModalOpen, setIsSavePresetModalOpen] = useState(false);
   const [isManagePresetsModalOpen, setIsManagePresetsModalOpen] = useState(false);
   const [isStylusModalOpen, setIsStylusModalOpen] = useState(false);
+  const [isAnalyticsModalOpen, setIsAnalyticsModalOpen] = useState(false);
+  const [isAIReaderOpen, setIsAIReaderOpen] = useState(false);
+  const [aiReaderPageImage, setAiReaderPageImage] = useState<string | null>(null);
   const [zoomScale, setZoomScale] = useState(1.0);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
 
+  const handleTriggerAIReader = useCallback((pageImage?: string) => {
+    if (pageImage) {
+      setAiReaderPageImage(pageImage);
+    } else {
+      const canvases = document.querySelectorAll('canvas');
+      if (canvases.length > 0) {
+        setAiReaderPageImage(canvases[0].toDataURL('image/png'));
+      }
+    }
+    setIsAIReaderOpen(true);
+  }, []);
+
   // Active User session
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  // Access Logging & Duration Tracker for Notebook Creator Analytics
+  useEffect(() => {
+    if (!notebook) return;
+    const sessionStart = Date.now();
+    const logId = `log_${notebook.id}_${currentUser?.id || 'user'}_${sessionStart}`;
+
+    const createInitialLog = async () => {
+      try {
+        const initialRecord: NotebookAccessLog = {
+          id: logId,
+          notebookId: notebook.id,
+          userId: currentUser?.id || auth.currentUser?.uid || 'anon',
+          userName: currentUser?.name || auth.currentUser?.displayName || 'User',
+          userEmail: currentUser?.email || auth.currentUser?.email || 'user@inkspace.app',
+          userAvatarColor: currentUser?.avatarColor || '#f59e0b',
+          userAvatarImage: currentUser?.avatarImage || auth.currentUser?.photoURL || undefined,
+          openedAt: sessionStart,
+          lastActiveAt: sessionStart,
+          durationSeconds: 0
+        };
+        await db.accessLogs.put(initialRecord);
+      } catch (err) {
+        console.error('Failed to log notebook access:', err);
+      }
+    };
+
+    createInitialLog();
+
+    const interval = setInterval(async () => {
+      const now = Date.now();
+      const duration = Math.round((now - sessionStart) / 1000);
+      try {
+        const existing = await db.accessLogs.get(logId);
+        if (existing) {
+          await db.accessLogs.update(logId, {
+            lastActiveAt: now,
+            durationSeconds: duration
+          });
+        }
+      } catch (err) {
+        console.error('Failed to update notebook access duration:', err);
+      }
+    }, 5000);
+
+    return () => {
+      clearInterval(interval);
+      const now = Date.now();
+      const finalDuration = Math.round((now - sessionStart) / 1000);
+      db.accessLogs.update(logId, {
+        lastActiveAt: now,
+        durationSeconds: finalDuration
+      }).catch(() => {});
+    };
+  }, [notebook, currentUser]);
 
   // Collaboration State
   const [presenceList, setPresenceList] = useState<CollaboratorPresence[]>([]);
@@ -845,6 +919,8 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
         }}
         isCurrentPageBookmarked={!!currentPage?.isBookmarked}
         onOpenStylusShortcuts={() => setIsStylusModalOpen(true)}
+        onOpenAnalytics={() => setIsAnalyticsModalOpen(true)}
+        onOpenAIReader={() => handleTriggerAIReader()}
         currentTheme={currentTheme}
         onToggleTheme={onToggleTheme}
       />
@@ -908,6 +984,7 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
                 onRedo={handleRedo}
                 onNextPage={handleNextPage}
                 onPrevPage={handlePrevPage}
+                onAIReaderTrigger={handleTriggerAIReader}
               />
 
               {/* Text Box Overlays */}
@@ -986,7 +1063,10 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
         isOpen={isSettingsModalOpen}
         settings={settings}
         onClose={() => setIsSettingsModalOpen(false)}
-        onUpdateSettings={setSettings}
+        onUpdateSettings={newSettings => {
+          setSettings(newSettings);
+          db.settings.put({ id: 'user_settings', data: newSettings }).catch(console.error);
+        }}
         onClearStorage={async () => {
           await db.delete();
           window.location.reload();
@@ -1069,6 +1149,44 @@ export const NotebookEditor: React.FC<NotebookEditorProps> = ({
         onClear={() => {
           setDictationTranscript('');
           setDictationInterim('');
+        }}
+      />
+
+      {/* Creator Access Logs & Analytics Modal */}
+      <NotebookAnalyticsModal
+        isOpen={isAnalyticsModalOpen}
+        notebook={notebook}
+        onClose={() => setIsAnalyticsModalOpen(false)}
+      />
+
+      {/* AI Reader Side Drawer & Handwriting Q&A Chat */}
+      <AIReaderPanel
+        isOpen={isAIReaderOpen}
+        onClose={() => setIsAIReaderOpen(false)}
+        pageImage={aiReaderPageImage}
+        pageIndex={currentPageIndex}
+        onInsertTextToPage={text => {
+          if (!currentPage) return;
+          const newText: TextObject = {
+            id: `text_${Date.now()}`,
+            pageId: currentPage.id,
+            x: 100,
+            y: 120,
+            width: 450,
+            height: 180,
+            content: text,
+            fontSize: 18,
+            fontFamily: 'Plus Jakarta Sans',
+            color: '#0f172a',
+            isBold: false,
+            isItalic: false,
+            isUnderline: false,
+            align: 'left',
+            rotation: 0
+          };
+          const newTexts = [...texts, newText];
+          setTexts(newTexts);
+          triggerAutosave(strokes, shapes, newTexts, images);
         }}
       />
     </div>

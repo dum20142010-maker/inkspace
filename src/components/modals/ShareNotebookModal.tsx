@@ -78,6 +78,9 @@ export const ShareNotebookModal: React.FC<ShareNotebookModalProps> = ({
     }
   };
 
+  const [codeOrHandleInput, setCodeOrHandleInput] = useState('');
+  const [isInviting, setIsInviting] = useState(false);
+
   const handleInvite = async () => {
     if (!selectedFriendId) return;
     try {
@@ -105,6 +108,38 @@ export const ShareNotebookModal: React.FC<ShareNotebookModalProps> = ({
       }
     } catch (err) {
       console.error('Invite error:', err);
+    }
+  };
+
+  const handleInviteByCode = async () => {
+    if (!codeOrHandleInput.trim()) return;
+    setIsInviting(true);
+    try {
+      const res = await fetch('/api/collab/invite-by-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          senderUserId: currentUser.id,
+          targetCodeOrUsername: codeOrHandleInput.trim(),
+          notebookId: notebook.id,
+          role: selectedRole
+        })
+      }).then(r => r.json());
+
+      if (res.success && res.targetUser) {
+        setMessage(`🎉 Sent pending collaboration invite to ${res.targetUser.name} (@${res.targetUser.username})!`);
+        setTimeout(() => setMessage(null), 3500);
+        setCodeOrHandleInput('');
+        loadMembers();
+        onUpdateNotebook({ ...notebook, isShared: true });
+      } else {
+        setMessage(res.error || 'Could not find user matching that 6-digit code or handle.');
+        setTimeout(() => setMessage(null), 3500);
+      }
+    } catch (err) {
+      setMessage('Failed to send collaboration invite.');
+    } finally {
+      setIsInviting(false);
     }
   };
 
@@ -199,25 +234,24 @@ export const ShareNotebookModal: React.FC<ShareNotebookModalProps> = ({
         )}
 
         <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-4 my-4">
-          {/* Section 1: Invite Friends */}
+          {/* Section 1: Invite via 6-Digit Friend Code or Handle */}
           {isOwner && (
             <div className="p-3.5 rounded-2xl bg-[#111622] border border-slate-800 space-y-3">
-              <h3 className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider">
-                Invite Friends
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider">
+                  Invite via 6-Digit Friend Code
+                </h3>
+                <span className="text-[10px] text-amber-400 font-semibold">Instant Alert</span>
+              </div>
+
               <div className="flex gap-2">
-                <select
-                  value={selectedFriendId}
-                  onChange={e => setSelectedFriendId(e.target.value)}
-                  className="flex-1 rounded-xl bg-[#0c1017] border border-slate-800 px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-400"
-                >
-                  <option value="">Select a friend...</option>
-                  {friends.map(f => (
-                    <option key={f.id} value={f.connectedUserId}>
-                      {f.connectedUser.name} (@{f.connectedUser.username})
-                    </option>
-                  ))}
-                </select>
+                <input
+                  type="text"
+                  value={codeOrHandleInput}
+                  onChange={e => setCodeOrHandleInput(e.target.value)}
+                  placeholder="Enter 6-digit Code (e.g. 849201) or @username..."
+                  className="flex-1 rounded-xl bg-[#0c1017] border border-slate-800 px-3 py-2 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                />
 
                 <select
                   value={selectedRole}
@@ -230,13 +264,35 @@ export const ShareNotebookModal: React.FC<ShareNotebookModalProps> = ({
                 </select>
 
                 <button
-                  onClick={handleInvite}
-                  disabled={!selectedFriendId}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-500 transition disabled:opacity-50"
+                  type="button"
+                  onClick={handleInviteByCode}
+                  disabled={!codeOrHandleInput.trim() || isInviting}
+                  className="px-4 py-2 rounded-xl bg-amber-400 text-slate-950 text-xs font-extrabold hover:bg-amber-300 transition disabled:opacity-50"
                 >
-                  Invite
+                  Send Invite
                 </button>
               </div>
+
+              {friends.length > 0 && (
+                <div className="pt-2 border-t border-slate-800/80 flex items-center gap-2">
+                  <span className="text-[11px] text-slate-400 font-medium shrink-0">Or pick connected friend:</span>
+                  <select
+                    value={selectedFriendId}
+                    onChange={e => {
+                      setSelectedFriendId(e.target.value);
+                      if (e.target.value) handleInvite();
+                    }}
+                    className="flex-1 rounded-xl bg-[#0c1017] border border-slate-800 px-2.5 py-1 text-xs text-white focus:outline-none"
+                  >
+                    <option value="">Select connected friend...</option>
+                    {friends.map(f => (
+                      <option key={f.id} value={f.connectedUserId}>
+                        {f.connectedUser.name} (@{f.connectedUser.username})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           )}
 

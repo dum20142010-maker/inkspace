@@ -37,6 +37,7 @@ interface CanvasWorkspaceProps {
   onRedo?: () => void;
   onNextPage?: () => void;
   onPrevPage?: () => void;
+  onAIReaderTrigger?: (pageImage: string) => void;
 }
 
 export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
@@ -61,7 +62,8 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
   onUndo,
   onRedo,
   onNextPage,
-  onPrevPage
+  onPrevPage,
+  onAIReaderTrigger
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const staticCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -72,6 +74,17 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
   const activePointsRef = useRef<Point[]>([]);
   const isStylusActiveRef = useRef<boolean>(false);
   const currentStrokesRef = useRef<Stroke[]>(strokes);
+
+  // AI Reader Long Press State
+  const longPressTimerRef = useRef<any>(null);
+  const longPressStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const [scanRipple, setScanRipple] = useState<{ x: number; y: number } | null>(null);
+
+  const captureCanvasImage = useCallback(() => {
+    const staticCanvas = staticCanvasRef.current;
+    if (!staticCanvas) return null;
+    return staticCanvas.toDataURL('image/png');
+  }, []);
 
   // Gesture State & References
   const [gestureToast, setGestureToast] = useState<{ message: string; icon?: string } | null>(null);
@@ -196,6 +209,20 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
     const y = (e.clientY - rect.top) / zoomScale;
     const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5;
 
+    // Start AI Reader stylus/touch long press timer (600ms)
+    longPressStartPosRef.current = { x: e.clientX, y: e.clientY };
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+
+    longPressTimerRef.current = setTimeout(() => {
+      const img = captureCanvasImage();
+      if (img && onAIReaderTrigger) {
+        setScanRipple({ x, y });
+        setTimeout(() => setScanRipple(null), 1600);
+        showGestureToast('AI Reader Activated', '🔮');
+        onAIReaderTrigger(img);
+      }
+    }, 600);
+
     setIsDrawing(true);
     setCurrentPressure(pressure);
 
@@ -271,6 +298,18 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
 
     const currentX = (e.clientX - rect.left) / zoomScale;
     const currentY = (e.clientY - rect.top) / zoomScale;
+
+    // Cancel long press timer if pointer moves
+    if (longPressStartPosRef.current) {
+      const dx = Math.abs(e.clientX - longPressStartPosRef.current.x);
+      const dy = Math.abs(e.clientY - longPressStartPosRef.current.y);
+      if (dx > 12 || dy > 12) {
+        if (longPressTimerRef.current) {
+          clearTimeout(longPressTimerRef.current);
+          longPressTimerRef.current = null;
+        }
+      }
+    }
     if (e.pressure && e.pressure > 0) {
       setCurrentPressure(e.pressure);
     }
@@ -392,6 +431,10 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
    * Pointer Up / End Stroke
    */
   const handlePointerUp = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
     if (!isDrawing) return;
     setIsDrawing(false);
 
@@ -623,6 +666,32 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
     }
   };
 
+  const handleDoubleClickCanvas = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const rect = activeCanvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = (e.clientX - rect.left) / zoomScale;
+    const y = (e.clientY - rect.top) / zoomScale;
+
+    const newText: TextObject = {
+      id: `text_${Date.now()}`,
+      pageId: page.id,
+      x,
+      y,
+      width: 280,
+      height: 90,
+      content: '',
+      fontSize: settings.fontSize || 20,
+      fontFamily: settings.fontFamily || 'Plus Jakarta Sans',
+      color: settings.textColor || '#0f172a',
+      isBold: false,
+      isItalic: false,
+      isUnderline: false,
+      align: 'left',
+      rotation: 0
+    };
+    onAddText(newText);
+  };
+
   return (
     <div
       ref={containerRef}
@@ -649,6 +718,7 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        onDoubleClick={handleDoubleClickCanvas}
         style={{ width: canvasWidth, height: canvasHeight }}
         className={`absolute inset-0 block touch-none ${
           settings.activeTool === 'eraser'
@@ -675,6 +745,20 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
             <span className="text-base text-indigo-400 font-mono">{gestureToast.icon}</span>
           )}
           <span>{gestureToast.message}</span>
+        </div>
+      )}
+
+      {/* AI Reader Long Press Ripple */}
+      {scanRipple && (
+        <div
+          className="absolute pointer-events-none z-50 flex items-center justify-center"
+          style={{ left: scanRipple.x * zoomScale - 40, top: scanRipple.y * zoomScale - 40 }}
+        >
+          <div className="w-20 h-20 rounded-full bg-amber-500/30 border-2 border-amber-400 animate-ping" />
+          <div className="absolute px-2.5 py-1 bg-slate-900/90 text-amber-300 text-[10px] font-bold rounded-full border border-amber-500/40 shadow-xl flex items-center gap-1 -top-8 whitespace-nowrap">
+            <Sparkles className="w-3 h-3 text-amber-400 animate-spin" />
+            AI Reader Scanning...
+          </div>
         </div>
       )}
 
@@ -706,6 +790,13 @@ export const CanvasWorkspace: React.FC<CanvasWorkspaceProps> = ({
             </div>
 
             <div className="flex flex-col gap-2 font-sans">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Stylus / Touch Long Press</span>
+                <span className="font-mono font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                  AI Reader 🔮
+                </span>
+              </div>
+
               <div className="flex items-center justify-between">
                 <span className="text-slate-400">Double Tap / 2-Finger Tap</span>
                 <span className="font-mono font-bold text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">

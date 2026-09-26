@@ -1,9 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Notebook, Folder, SortOption, SortDirection, User, SearchResultItem, ToolSettings } from '../../types/notebook';
 import { NotebookCard } from './NotebookCard';
 import { QuickStudioCard } from './QuickStudioCard';
 import { CreateNotebookModal } from './CreateNotebookModal';
 import { ShareNotebookModal } from '../modals/ShareNotebookModal';
+import { NotebookAnalyticsModal } from '../modals/NotebookAnalyticsModal';
 import { StylusShortcutsModal } from '../modals/StylusShortcutsModal';
 import { FriendsModal } from '../social/FriendsModal';
 import { UserProfileModal } from '../auth/UserProfileModal';
@@ -33,7 +34,9 @@ import {
   UserCheck,
   Sun,
   Moon,
-  PenTool
+  PenTool,
+  Eye,
+  Activity
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -51,6 +54,8 @@ interface DashboardProps {
   onDuplicateNotebook: (id: string) => void;
   onRenameNotebook: (id: string, newTitle: string) => void;
   onCreateFolder: (name: string) => void;
+  onMoveNotebookToFolder?: (notebookId: string, folderId: string | null) => void;
+  onDeleteFolder?: (folderId: string) => void;
   onRestoreFromTrash: (id: string) => void;
   onPermanentDelete: (id: string) => void;
   onOpenSettings: () => void;
@@ -84,6 +89,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onDuplicateNotebook,
   onRenameNotebook,
   onCreateFolder,
+  onMoveNotebookToFolder,
+  onDeleteFolder,
   onOpenSettings,
   onOpenAuth,
   onSignOut,
@@ -97,6 +104,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [isSearchingOcr, setIsSearchingOcr] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+  const [dragOverRoot, setDragOverRoot] = useState(false);
+  const [dragToast, setDragToast] = useState<string | null>(null);
+
   const [sortOption, setSortOption] = useState<SortOption>('recent');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
@@ -107,15 +118,39 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [isNotificationsModalOpen, setIsNotificationsModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isStylusModalOpen, setIsStylusModalOpen] = useState(false);
+  const [isAnalyticsModalOpen, setIsAnalyticsModalOpen] = useState(false);
   const [selectedNotebookForShare, setSelectedNotebookForShare] = useState<Notebook | null>(null);
+  const [selectedNotebookForAnalytics, setSelectedNotebookForAnalytics] = useState<Notebook | null>(null);
 
   const [showFolderInput, setShowFolderInput] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const isLight = currentTheme === 'light';
+
+  const loadNotificationCount = useCallback(async () => {
+    if (!currentUser) return;
+    try {
+      const res = await fetch(`/api/notifications?userId=${currentUser.id}`).then(r => r.json());
+      if (res.notifications) {
+        const count = res.notifications.filter((n: any) => !n.read).length;
+        setUnreadNotificationsCount(count);
+      }
+    } catch (err) {
+      // Ignore count fetch error
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (currentUser) {
+      loadNotificationCount();
+      const interval = setInterval(loadNotificationCount, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [currentUser, loadNotificationCount]);
 
   // Debounced search through titles and handwritten stroke OCR
   useEffect(() => {
@@ -269,14 +304,36 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   setSelectedFolderId(null);
                   setSelectedTagFilter(null);
                 }}
-                className={`w-full flex items-center gap-3 rounded-xl px-3 py-2 text-xs font-semibold transition ${
-                  activeTab === 'my_notebooks' && !selectedFolderId && !selectedTagFilter
+                onDragOver={e => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  setDragOverRoot(true);
+                }}
+                onDragLeave={() => setDragOverRoot(false)}
+                onDrop={e => {
+                  e.preventDefault();
+                  setDragOverRoot(false);
+                  const nbId = e.dataTransfer.getData('text/plain');
+                  if (nbId && onMoveNotebookToFolder) {
+                    const nb = notebooks.find(n => n.id === nbId);
+                    onMoveNotebookToFolder(nbId, null);
+                    setDragToast(`Moved "${nb?.title || 'Notebook'}" to Root / Uncategorized`);
+                    setTimeout(() => setDragToast(null), 3000);
+                  }
+                }}
+                className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition ${
+                  dragOverRoot
+                    ? 'bg-amber-400/20 text-amber-300 border-2 border-amber-400 animate-pulse'
+                    : activeTab === 'my_notebooks' && !selectedFolderId && !selectedTagFilter
                     ? 'bg-slate-800/70 border border-slate-700/60 text-white shadow-sm'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
                 }`}
               >
-                <BookOpen className="w-4 h-4 text-amber-400" />
-                <span>My Notebooks</span>
+                <div className="flex items-center gap-3">
+                  <BookOpen className="w-4 h-4 text-amber-400" />
+                  <span>My Notebooks</span>
+                </div>
+                {dragOverRoot && <span className="text-[10px] font-mono font-bold text-amber-300">DROP HERE</span>}
               </button>
 
               <button
@@ -356,13 +413,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="px-3 pt-6">
             <div className="flex items-center justify-between px-3 mb-2">
               <span className="text-[10px] font-mono font-bold tracking-wider text-slate-500 uppercase">
-                VOLUMES & FOLDERS
+                VOLUMES & FOLDERS ({folders.length})
               </span>
               <button
                 onClick={() => setShowFolderInput(true)}
-                className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800/50 transition"
+                className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800/50 transition flex items-center gap-1"
+                title="Create New Custom Folder"
               >
-                <FolderPlus className="w-3.5 h-3.5" />
+                <FolderPlus className="w-3.5 h-3.5 text-amber-400" />
               </button>
             </div>
 
@@ -380,25 +438,84 @@ export const Dashboard: React.FC<DashboardProps> = ({
               </form>
             )}
 
-            <div className="space-y-0.5">
-              {folders.map(f => (
-                <button
-                  key={f.id}
-                  onClick={() => {
-                    setActiveTab('folder');
-                    setSelectedFolderId(f.id);
-                    setSelectedTagFilter(null);
-                  }}
-                  className={`w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-medium transition ${
-                    activeTab === 'folder' && selectedFolderId === f.id
-                      ? 'bg-slate-800/70 text-indigo-300 border border-slate-700/60 font-semibold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
-                  }`}
-                >
-                  <FolderIcon className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="truncate">{f.name}</span>
-                </button>
-              ))}
+            <div className="space-y-1">
+              {folders.length === 0 ? (
+                <p className="px-3 py-2 text-[11px] text-slate-500 italic">No folders created yet. Click + to add one.</p>
+              ) : (
+                folders.map(f => {
+                  const countInFolder = notebooks.filter(n => n.folderId === f.id && !n.isDeleted).length;
+                  const isHovering = dragOverFolderId === f.id;
+
+                  return (
+                    <div
+                      key={f.id}
+                      onDragOver={e => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        setDragOverFolderId(f.id);
+                      }}
+                      onDragLeave={() => {
+                        if (dragOverFolderId === f.id) setDragOverFolderId(null);
+                      }}
+                      onDrop={e => {
+                        e.preventDefault();
+                        setDragOverFolderId(null);
+                        const nbId = e.dataTransfer.getData('text/plain');
+                        if (nbId && onMoveNotebookToFolder) {
+                          const nb = notebooks.find(n => n.id === nbId);
+                          onMoveNotebookToFolder(nbId, f.id);
+                          setDragToast(`🎉 Moved "${nb?.title || 'Notebook'}" into folder "${f.name}"!`);
+                          setTimeout(() => setDragToast(null), 3500);
+                        }
+                      }}
+                      className="group/fitem relative flex items-center justify-between"
+                    >
+                      <button
+                        onClick={() => {
+                          setActiveTab('folder');
+                          setSelectedFolderId(f.id);
+                          setSelectedTagFilter(null);
+                        }}
+                        className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition ${
+                          isHovering
+                            ? 'bg-amber-400/20 text-amber-300 border-2 border-amber-400 font-bold shadow-lg animate-pulse'
+                            : activeTab === 'folder' && selectedFolderId === f.id
+                            ? 'bg-slate-800/70 text-indigo-300 border border-slate-700/60 font-semibold'
+                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <FolderIcon className={`w-3.5 h-3.5 shrink-0 ${isHovering ? 'text-amber-400' : 'text-indigo-400'}`} />
+                          <span className="truncate">{f.name}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[10px] font-mono text-slate-500 bg-slate-900 px-1.5 py-0.2 rounded">
+                            {countInFolder}
+                          </span>
+                          {onDeleteFolder && (
+                            <button
+                              onClick={e => {
+                                e.stopPropagation();
+                                if (window.confirm(`Delete folder "${f.name}"? Notebooks inside will be moved to uncategorized.`)) {
+                                  onDeleteFolder(f.id);
+                                  if (selectedFolderId === f.id) {
+                                    setActiveTab('my_notebooks');
+                                    setSelectedFolderId(null);
+                                  }
+                                }
+                              }}
+                              className="opacity-0 group-hover/fitem:opacity-100 p-1 text-slate-500 hover:text-rose-400 transition"
+                              title="Delete Folder"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </button>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
@@ -474,10 +591,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <button
               onClick={() => setIsNotificationsModalOpen(true)}
               className="relative p-2 rounded-xl bg-[#111622] border border-slate-800 text-slate-300 hover:text-white transition"
-              title="Notifications"
+              title="Notification Center"
             >
               <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-[#0b0e16]" />
+              {unreadNotificationsCount > 0 ? (
+                <span className="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 font-mono text-[9px] font-extrabold ring-2 ring-[#0b0e16] animate-pulse">
+                  {unreadNotificationsCount}
+                </span>
+              ) : (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-slate-700 ring-2 ring-[#0b0e16]" />
+              )}
             </button>
 
 
@@ -561,18 +684,45 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </header>
 
         {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar relative">
+          {/* Drag Toast Banner */}
+          {dragToast && (
+            <div className="mb-4 px-4 py-3 rounded-2xl bg-amber-400 text-slate-950 font-bold text-xs shadow-xl flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+              <span className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-slate-950" />
+                <span>{dragToast}</span>
+              </span>
+              <button onClick={() => setDragToast(null)} className="p-1 hover:bg-slate-950/10 rounded-lg">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 mb-6">
             <div>
-              <h1 className="font-serif text-3xl font-bold text-white">
-                {activeTab === 'my_notebooks' && 'My Private & Active Notebooks'}
-                {activeTab === 'shared_with_me' && 'Notebooks Shared With Me'}
-                {activeTab === 'favorites' && 'Favorite Notebooks'}
-                {activeTab === 'recent' && 'Recent Notebook Activity'}
-                {activeTab === 'trash' && 'Trash / Deleted Manuscripts'}
+              <h1 className="font-serif text-3xl font-bold text-white flex items-center gap-3">
+                <span>
+                  {activeTab === 'my_notebooks' && (selectedFolderId ? `Folder: ${folders.find(f => f.id === selectedFolderId)?.name || 'Custom Folder'}` : 'My Private & Active Notebooks')}
+                  {activeTab === 'folder' && `Folder: ${folders.find(f => f.id === selectedFolderId)?.name || 'Custom Folder'}`}
+                  {activeTab === 'shared_with_me' && 'Notebooks Shared With Me'}
+                  {activeTab === 'favorites' && 'Favorite Notebooks'}
+                  {activeTab === 'recent' && 'Recent Notebook Activity'}
+                  {activeTab === 'trash' && 'Trash / Deleted Manuscripts'}
+                </span>
+                {selectedFolderId && (
+                  <button
+                    onClick={() => {
+                      setActiveTab('my_notebooks');
+                      setSelectedFolderId(null);
+                    }}
+                    className="px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-sans font-semibold transition"
+                  >
+                    View All
+                  </button>
+                )}
               </h1>
               <p className="text-xs text-slate-400 mt-1">
-                Real-time multi-user handwriting, PDF annotation, and collaborative ink canvas.
+                Drag and drop notebook cards directly into any folder in the sidebar or below to organize your library.
               </p>
             </div>
 
@@ -614,6 +764,99 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </div>
 
+          {/* Folders Cards Grid in Main Workspace */}
+          {folders.length > 0 && !selectedFolderId && (activeTab === 'my_notebooks' || activeTab === 'folder') && !searchQuery && (
+            <div className="mb-8 space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                  <FolderIcon className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Folders & Volumes ({folders.length}) — Drag notebooks onto any folder</span>
+                </h2>
+                <button
+                  onClick={() => setShowFolderInput(true)}
+                  className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Create Custom Folder</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {folders.map(f => {
+                  const countInF = notebooks.filter(n => n.folderId === f.id && !n.isDeleted).length;
+                  const isHovering = dragOverFolderId === f.id;
+
+                  return (
+                    <div
+                      key={f.id}
+                      onDragOver={e => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        setDragOverFolderId(f.id);
+                      }}
+                      onDragLeave={() => {
+                        if (dragOverFolderId === f.id) setDragOverFolderId(null);
+                      }}
+                      onDrop={e => {
+                        e.preventDefault();
+                        setDragOverFolderId(null);
+                        const nbId = e.dataTransfer.getData('text/plain');
+                        if (nbId && onMoveNotebookToFolder) {
+                          const nb = notebooks.find(n => n.id === nbId);
+                          onMoveNotebookToFolder(nbId, f.id);
+                          setDragToast(`🎉 Moved "${nb?.title || 'Notebook'}" into folder "${f.name}"!`);
+                          setTimeout(() => setDragToast(null), 3500);
+                        }
+                      }}
+                      onClick={() => {
+                        setActiveTab('folder');
+                        setSelectedFolderId(f.id);
+                      }}
+                      className={`p-4 rounded-2xl border cursor-pointer transition select-none relative group/fcard ${
+                        isHovering
+                          ? 'bg-amber-400/20 border-2 border-amber-400 shadow-2xl scale-[1.02] animate-pulse'
+                          : 'bg-[#0e131f] border-slate-800 hover:border-slate-700/90 shadow-md'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                          <FolderIcon className="w-5 h-5" />
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] font-mono font-bold bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full border border-slate-700">
+                            {countInF} notebook{countInF === 1 ? '' : 's'}
+                          </span>
+                          {onDeleteFolder && (
+                            <button
+                              onClick={e => {
+                                e.stopPropagation();
+                                if (window.confirm(`Delete folder "${f.name}"?`)) {
+                                  onDeleteFolder(f.id);
+                                }
+                              }}
+                              className="opacity-0 group-hover/fcard:opacity-100 p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-rose-400 transition"
+                              title="Delete folder"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-3">
+                        <h3 className="font-bold text-sm text-white truncate">{f.name}</h3>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          {isHovering ? '✨ Drop notebook here to move' : 'Click to view contents'}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Notebook Grid */}
           {sortedNotebooks.length === 0 ? (
             <div className="h-64 rounded-3xl bg-[#0e131f] border border-slate-800 flex flex-col items-center justify-center text-center p-6">
@@ -637,18 +880,35 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     onDelete={onDeleteNotebook}
                     onDuplicate={onDuplicateNotebook}
                     onRename={onRenameNotebook}
-                  />
-                  {/* Quick Share Button on card overlay */}
-                  <button
-                    onClick={e => {
-                      e.stopPropagation();
-                      handleOpenShareModal(nb);
+                    onViewAnalytics={selectedNb => {
+                      setSelectedNotebookForAnalytics(selectedNb);
+                      setIsAnalyticsModalOpen(true);
                     }}
-                    className="absolute top-4 right-12 z-20 p-1.5 rounded-lg bg-slate-900/80 border border-slate-700 text-slate-300 hover:text-white hover:bg-indigo-600 transition"
-                    title="Share Notebook"
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                  </button>
+                  />
+                  {/* Quick Share & Analytics Buttons on card overlay */}
+                  <div className="absolute top-4 right-12 z-20 flex items-center gap-1">
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        setSelectedNotebookForAnalytics(nb);
+                        setIsAnalyticsModalOpen(true);
+                      }}
+                      className="p-1.5 rounded-lg bg-slate-900/80 border border-slate-700 text-slate-300 hover:text-amber-400 hover:bg-slate-800 transition"
+                      title="View Access Logs & Analytics"
+                    >
+                      <Activity className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        handleOpenShareModal(nb);
+                      }}
+                      className="p-1.5 rounded-lg bg-slate-900/80 border border-slate-700 text-slate-300 hover:text-white hover:bg-indigo-600 transition"
+                      title="Share Notebook"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -673,7 +933,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        setSelectedNotebookForAnalytics(nb);
+                        setIsAnalyticsModalOpen(true);
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-800 text-xs font-bold text-sky-300 hover:bg-sky-600 hover:text-white transition"
+                    >
+                      <Activity className="w-3.5 h-3.5" />
+                      <span>Analytics</span>
+                    </button>
                     <button
                       onClick={e => {
                         e.stopPropagation();
@@ -715,8 +986,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
       <NotificationsModal
         isOpen={isNotificationsModalOpen}
         currentUser={currentUser}
-        onClose={() => setIsNotificationsModalOpen(false)}
+        onClose={() => {
+          setIsNotificationsModalOpen(false);
+          loadNotificationCount();
+        }}
         onOpenNotebook={onOpenNotebook}
+        onInviteAccepted={() => {
+          loadNotificationCount();
+          // Reload notebooks or window if needed
+          window.location.reload();
+        }}
       />
 
       <ShareNotebookModal
@@ -734,6 +1013,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
         settings={toolSettings}
         onClose={() => setIsStylusModalOpen(false)}
         onUpdateSettings={onUpdateSettings}
+      />
+
+      <NotebookAnalyticsModal
+        isOpen={isAnalyticsModalOpen}
+        notebook={selectedNotebookForAnalytics}
+        onClose={() => setIsAnalyticsModalOpen(false)}
       />
     </div>
   );

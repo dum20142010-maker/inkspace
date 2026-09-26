@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create, update: if isOwner(userId) && request.resource.data.uid == request.auth.uid;
+      allow delete: if isOwner(userId);
+    }
+
+    // Notebooks collection
+    match /notebooks/{notebookId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.isShared == true);
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid && isValidId(notebookId);
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // Pages collection
+    match /pages/{pageId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSignedIn() && isValidId(pageId);
+    }
+  }
+}

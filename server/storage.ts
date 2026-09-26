@@ -7,7 +7,8 @@ import {
   Stroke,
   ShapeObject,
   TextObject,
-  ImageObject
+  ImageObject,
+  NotebookAccessLog
 } from '../src/types/notebook';
 import {
   CollaboratorRole,
@@ -43,6 +44,7 @@ export interface ServerDatabase {
   comments: Record<string, NotebookComment[]>; // notebookId -> NotebookComment[]
   activities: Record<string, NotebookActivity[]>; // notebookId -> NotebookActivity[]
   versions: Record<string, NotebookVersion[]>; // notebookId -> NotebookVersion[]
+  accessLogs: Record<string, NotebookAccessLog[]>; // notebookId -> NotebookAccessLog[]
   notifications: CollaborationNotification[];
 }
 
@@ -96,6 +98,7 @@ class StorageManager {
       name: 'Alex Morgan',
       username: 'alex_ink',
       email: 'alex@seen.app',
+      collabCode: '849201',
       bio: 'Calligrapher & Systems Architect at Atelier Codex',
       workplace: 'Atelier Codex',
       passwordHash: hashPassword('Password123!', salt1),
@@ -115,6 +118,7 @@ class StorageManager {
       name: 'Sarah Chen',
       username: 'sarah_arch',
       email: 'sarah@seen.app',
+      collabCode: '392018',
       bio: 'Distributed Systems Engineer & Technical Illustrator',
       workplace: 'Kafka Foundation',
       passwordHash: hashPassword('Password123!', salt2),
@@ -134,6 +138,7 @@ class StorageManager {
       name: 'Daniel Vance',
       username: 'daniel_code',
       email: 'daniel@seen.app',
+      collabCode: '710294',
       bio: 'Compiler Researcher & Stylus Hardware Hacker',
       workplace: 'Quantum Lab',
       passwordHash: hashPassword('Password123!', salt3),
@@ -153,6 +158,7 @@ class StorageManager {
       name: 'Maya Lin',
       username: 'maya_sketch',
       email: 'maya@seen.app',
+      collabCode: '582910',
       bio: 'Urban Designer & Spatial UX Researcher',
       workplace: 'Design Institute',
       passwordHash: hashPassword('Password123!', salt4),
@@ -452,6 +458,43 @@ class StorageManager {
       versions: {
         notebook_physics_collab: versions
       },
+      accessLogs: {
+        notebook_physics_collab: [
+          {
+            id: 'log_seed_alex_1',
+            notebookId: 'notebook_physics_collab',
+            userId: userA.id,
+            userName: userA.name,
+            userEmail: userA.email,
+            userAvatarColor: userA.avatarColor,
+            openedAt: now - 3600000,
+            lastActiveAt: now - 1000,
+            durationSeconds: 1420
+          },
+          {
+            id: 'log_seed_sarah_1',
+            notebookId: 'notebook_physics_collab',
+            userId: userB.id,
+            userName: userB.name,
+            userEmail: userB.email,
+            userAvatarColor: userB.avatarColor,
+            openedAt: now - 7200000,
+            lastActiveAt: now - 3600000,
+            durationSeconds: 2150
+          },
+          {
+            id: 'log_seed_daniel_1',
+            notebookId: 'notebook_physics_collab',
+            userId: userC.id,
+            userName: userC.name,
+            userEmail: userC.email,
+            userAvatarColor: userC.avatarColor,
+            openedAt: now - 18000000,
+            lastActiveAt: now - 17000000,
+            durationSeconds: 840
+          }
+        ]
+      },
       notifications
     };
   }
@@ -470,11 +513,45 @@ class StorageManager {
   }
 
   public findUserByUsername(username: string): User | undefined {
-    const clean = username.replace(/^@/, '').toLowerCase();
+    const clean = username.replace(/^@/, '').toLowerCase().trim();
     return this.data.users.find(u => u.username.toLowerCase() === clean);
   }
 
+  public findUserByCollabCodeOrHandle(query: string): User | undefined {
+    const clean = query.trim().toLowerCase().replace(/^@/, '');
+    if (!clean) return undefined;
+    return this.data.users.find(
+      u =>
+        (u.collabCode && u.collabCode.toLowerCase() === clean) ||
+        u.username.toLowerCase() === clean ||
+        u.email.toLowerCase() === clean ||
+        u.id === clean
+    );
+  }
+
+  public isUsernameAvailable(username: string, excludeUserId?: string): boolean {
+    const clean = username.replace(/^@/, '').toLowerCase().trim();
+    if (!clean) return false;
+    const existing = this.data.users.find(
+      u => u.username.toLowerCase() === clean && u.id !== excludeUserId
+    );
+    return !existing;
+  }
+
+  public generateCollabCode(): string {
+    let code = '';
+    let attempts = 0;
+    do {
+      code = Math.floor(100000 + Math.random() * 900000).toString();
+      attempts++;
+    } while (this.data.users.some(u => u.collabCode === code) && attempts < 100);
+    return code;
+  }
+
   public createUser(user: User): User {
+    if (!user.collabCode) {
+      user.collabCode = this.generateCollabCode();
+    }
     this.data.users.push(user);
     this.save();
     return user;
@@ -488,15 +565,20 @@ class StorageManager {
     return this.data.users[idx];
   }
 
-  public searchUsers(query: string, currentUserId?: string): { id: string; name: string; username: string; avatarColor: string; avatarImage?: string; bio?: string; isFriend?: boolean }[] {
+  public searchUsers(query: string, currentUserId?: string): { id: string; name: string; username: string; collabCode?: string; avatarColor: string; avatarImage?: string; bio?: string; isFriend?: boolean }[] {
     const q = query.trim().toLowerCase().replace(/^@/, '');
     if (!q) return [];
     return this.data.users
-      .filter(u => u.id !== currentUserId && (u.username.toLowerCase().includes(q) || u.name.toLowerCase().includes(q)))
+      .filter(u => u.id !== currentUserId && (
+        u.username.toLowerCase().includes(q) ||
+        u.name.toLowerCase().includes(q) ||
+        (u.collabCode && u.collabCode.includes(q))
+      ))
       .map(u => ({
         id: u.id,
         name: u.name,
         username: u.username,
+        collabCode: u.collabCode || '739201',
         avatarColor: u.avatarColor,
         avatarImage: u.avatarImage,
         bio: u.bio,
@@ -946,6 +1028,47 @@ class StorageManager {
       if (n.userId === userId) n.read = true;
     }
     this.save();
+  }
+
+  public respondToNotification(notificationId: string, action: 'accept' | 'decline', userId: string): { success: boolean; notification?: CollaborationNotification; notebookId?: string } {
+    const notif = this.data.notifications.find(n => n.id === notificationId && n.userId === userId);
+    if (!notif) return { success: false };
+
+    if (action === 'accept') {
+      notif.inviteStatus = 'accepted';
+      notif.read = true;
+      if (notif.notebookId) {
+        this.addNotebookMember(notif.notebookId, userId, notif.role || 'editor');
+        const user = this.findUserById(userId);
+        if (user) {
+          this.logActivity(notif.notebookId, userId, user.name, 'joined', `Accepted collaboration invite from ${notif.fromUserName}`);
+        }
+      }
+    } else {
+      notif.inviteStatus = 'declined';
+      notif.read = true;
+    }
+
+    this.save();
+    return { success: true, notification: notif, notebookId: notif.notebookId };
+  }
+
+  // --- Access Logs ---
+  public getAccessLogs(notebookId: string): NotebookAccessLog[] {
+    return this.data.accessLogs?.[notebookId] || [];
+  }
+
+  public upsertAccessLog(notebookId: string, log: NotebookAccessLog): NotebookAccessLog {
+    if (!this.data.accessLogs) this.data.accessLogs = {};
+    if (!this.data.accessLogs[notebookId]) this.data.accessLogs[notebookId] = [];
+    const idx = this.data.accessLogs[notebookId].findIndex(l => l.id === log.id);
+    if (idx >= 0) {
+      this.data.accessLogs[notebookId][idx] = { ...this.data.accessLogs[notebookId][idx], ...log };
+    } else {
+      this.data.accessLogs[notebookId].push(log);
+    }
+    this.save();
+    return log;
   }
 }
 

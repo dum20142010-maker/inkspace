@@ -86,21 +86,30 @@ export const UserProfileMenu: React.FC<UserProfileMenuProps> = ({
       {isOpen && (
         <div className="absolute right-0 mt-2 z-40 w-64 rounded-2xl bg-slate-900 border border-slate-800 p-2 shadow-2xl text-xs text-slate-200 animate-in fade-in zoom-in-95">
           {/* User Profile Card */}
-          <div className="p-3 rounded-xl bg-slate-800/50 border border-slate-800 mb-2">
+          <div className="p-3 rounded-xl bg-slate-800/50 border border-slate-800 mb-2 space-y-2">
             <div className="flex items-center gap-3">
               <div
-                className="w-10 h-10 rounded-2xl flex items-center justify-center text-sm font-bold text-white shadow-md shrink-0"
+                className="w-10 h-10 rounded-2xl flex items-center justify-center text-sm font-bold text-white shadow-md shrink-0 overflow-hidden"
                 style={{ backgroundColor: currentUser.avatarColor || '#6366f1' }}
               >
-                {initials}
+                {currentUser.avatarImage ? (
+                  <img src={currentUser.avatarImage} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <span>{initials}</span>
+                )}
               </div>
               <div className="min-w-0">
                 <p className="font-bold text-white text-xs truncate">{currentUser.name}</p>
+                <p className="text-[10px] font-mono text-indigo-300 truncate">@{currentUser.username}</p>
                 <p className="text-[10px] text-slate-400 truncate">{currentUser.email}</p>
-                <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-emerald-400 mt-1 bg-emerald-500/10 px-1.5 py-0.5 rounded-full border border-emerald-500/20">
-                  <Check className="w-2.5 h-2.5" /> Authenticated
-                </span>
               </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[10px]">
+              <span className="text-slate-400 font-medium">Friend Code:</span>
+              <span className="font-mono font-extrabold text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-md">
+                #{currentUser.collabCode || '849201'}
+              </span>
             </div>
           </div>
 

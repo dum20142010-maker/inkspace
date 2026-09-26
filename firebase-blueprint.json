@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "user": {
+      "title": "User",
+      "description": "User profile document",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 256 },
+        "displayName": { "type": "string", "maxLength": 128 },
+        "photoURL": { "type": "string", "maxLength": 512 },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["uid", "email"]
+    },
+    "notebook": {
+      "title": "Notebook",
+      "description": "InkSpace digital notebook",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "maxLength": 256 },
+        "coverColor": { "type": "string", "maxLength": 64 },
+        "isFavorite": { "type": "boolean" },
+        "isArchived": { "type": "boolean" },
+        "isDeleted": { "type": "boolean" },
+        "createdAt": { "type": "integer" },
+        "updatedAt": { "type": "integer" },
+        "userId": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["id", "title", "userId"]
+    },
+    "page": {
+      "title": "Page",
+      "description": "Notebook page containing vector strokes and text",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "notebookId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "pageIndex": { "type": "integer" },
+        "strokes": { "type": "string" },
+        "textContent": { "type": "string" },
+        "backgroundPattern": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "integer" }
+      },
+      "required": ["id", "notebookId", "pageIndex"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/user" },
+      "description": "User profiles collection"
+    },
+    "/notebooks/{notebookId}": {
+      "schema": { "$ref": "#/entities/notebook" },
+      "description": "Notebooks collection"
+    },
+    "/pages/{pageId}": {
+      "schema": { "$ref": "#/entities/page" },
+      "description": "Pages collection"
+    }
+  }
+}

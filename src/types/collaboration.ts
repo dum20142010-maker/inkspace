@@ -136,8 +136,11 @@ export interface CollaborationNotification {
   fromUserId: string;
   fromUserName: string;
   fromUserAvatar: string;
+  fromUserCollabCode?: string;
   notebookId?: string;
   notebookTitle?: string;
+  role?: CollaboratorRole;
+  inviteStatus?: 'pending' | 'accepted' | 'declined';
   message: string;
   read: boolean;
   createdAt: number;

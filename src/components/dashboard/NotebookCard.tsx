@@ -11,7 +11,9 @@ import {
   Check,
   Share2,
   FolderInput,
-  Users
+  Users,
+  Eye,
+  Activity
 } from 'lucide-react';
 
 interface NotebookCardProps {
@@ -24,6 +26,7 @@ interface NotebookCardProps {
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
   onRename: (id: string, newTitle: string) => void;
+  onViewAnalytics?: (notebook: Notebook) => void;
 }
 
 export const NotebookCard: React.FC<NotebookCardProps> = ({
@@ -35,7 +38,8 @@ export const NotebookCard: React.FC<NotebookCardProps> = ({
   onFavorite,
   onDelete,
   onDuplicate,
-  onRename
+  onRename,
+  onViewAnalytics
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -117,12 +121,18 @@ export const NotebookCard: React.FC<NotebookCardProps> = ({
 
   return (
     <div
+      draggable={true}
+      onDragStart={e => {
+        e.dataTransfer.setData('text/plain', notebook.id);
+        e.dataTransfer.setData('application/json', JSON.stringify({ id: notebook.id, title: notebook.title }));
+        e.dataTransfer.effectAllowed = 'move';
+      }}
       onClick={() => onOpen(notebook.id)}
       className={`group relative flex flex-col rounded-2xl ${
         isLight
           ? 'bg-white border-slate-200 shadow-md hover:border-slate-300'
           : 'bg-[#0e131f] border-slate-800/90 shadow-xl hover:border-slate-700/80'
-      } border overflow-hidden select-none transition cursor-pointer`}
+      } border overflow-hidden select-none transition cursor-grab active:cursor-grabbing hover:-translate-y-0.5`}
     >
       {/* Notebook Cover / Header Mockup */}
       <div
@@ -282,6 +292,17 @@ export const NotebookCard: React.FC<NotebookCardProps> = ({
           >
             <Edit3 className="w-3.5 h-3.5 text-amber-400" />
             <span>Rename Folio</span>
+          </button>
+          <button
+            onClick={e => {
+              e.stopPropagation();
+              setShowMenu(false);
+              if (onViewAnalytics) onViewAnalytics(notebook);
+            }}
+            className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg ${isLight ? 'hover:bg-slate-100' : 'hover:bg-slate-800'} text-left transition`}
+          >
+            <Activity className="w-3.5 h-3.5 text-sky-400" />
+            <span>Activity & Viewers</span>
           </button>
           <button
             onClick={e => {

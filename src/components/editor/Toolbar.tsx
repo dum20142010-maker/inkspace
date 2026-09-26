@@ -33,7 +33,8 @@ import {
   BookmarkPlus,
   Users,
   Mic,
-  MicOff
+  MicOff,
+  Activity
 } from 'lucide-react';
 
 interface ToolbarProps {
@@ -70,6 +71,8 @@ interface ToolbarProps {
   onOpenBookmarkModal?: () => void;
   isCurrentPageBookmarked?: boolean;
   onOpenStylusShortcuts?: () => void;
+  onOpenAnalytics?: () => void;
+  onOpenAIReader?: () => void;
   currentTheme?: 'dark' | 'light';
   onToggleTheme?: () => void;
 }
@@ -122,6 +125,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onOpenBookmarkModal,
   isCurrentPageBookmarked = false,
   onOpenStylusShortcuts,
+  onOpenAnalytics,
+  onOpenAIReader,
   currentTheme = 'dark',
   onToggleTheme
 }) => {
@@ -368,8 +373,43 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             </div>
           )}
 
-          {/* Stroke Size Selector for Pen Tools */}
-          {settings.activeTool !== 'eraser' && (
+          {/* Stroke Size Selector for Pen Tools or Font Size for Text Tool */}
+          {settings.activeTool === 'text' ? (
+            <div className="flex items-center gap-1.5 pl-1.5 pr-1">
+              <select
+                value={settings.fontFamily || 'Plus Jakarta Sans'}
+                onChange={e => onSettingChange('fontFamily', e.target.value)}
+                className="bg-slate-900 text-slate-200 text-[11px] font-medium rounded-lg px-2 py-1 border border-slate-700 focus:outline-none cursor-pointer"
+                title="Default Font Family"
+              >
+                <option value="Plus Jakarta Sans">Sans</option>
+                <option value="Inter">Inter</option>
+                <option value="Playfair Display">Serif</option>
+                <option value="Caveat">Handwritten</option>
+                <option value="Fira Code">Mono</option>
+              </select>
+
+              <div className="flex items-center bg-slate-900 rounded-lg border border-slate-700 px-1">
+                <button
+                  onClick={() => onSettingChange('fontSize', Math.max(12, (settings.fontSize || 20) - 2))}
+                  className="px-1.5 py-0.5 text-slate-300 hover:text-white text-xs font-bold"
+                  title="Smaller Font Size"
+                >
+                  A-
+                </button>
+                <span className="text-[11px] font-mono text-indigo-400 font-bold px-1">
+                  {settings.fontSize || 20}px
+                </span>
+                <button
+                  onClick={() => onSettingChange('fontSize', Math.min(72, (settings.fontSize || 20) + 2))}
+                  className="px-1.5 py-0.5 text-slate-300 hover:text-white text-xs font-bold"
+                  title="Larger Font Size"
+                >
+                  A+
+                </button>
+              </div>
+            </div>
+          ) : settings.activeTool !== 'eraser' ? (
             <div className="flex items-center gap-1 pl-1.5 pr-1">
               {PEN_WIDTHS.map(pw => (
                 <button
@@ -389,7 +429,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 </button>
               ))}
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Right: Search, OCR, Undo/Redo, Zoom, Paper Theme, Export */}
@@ -464,6 +504,30 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           )}
 
 
+
+          {/* Creator Access Logs & Analytics Button */}
+          {onOpenAnalytics && (
+            <button
+              onClick={onOpenAnalytics}
+              className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-amber-400 hover:border-slate-700 transition"
+              title="Notebook Activity Logs & Viewer Analytics"
+            >
+              <Activity className="w-4 h-4 text-sky-400" />
+              <span className="hidden xl:inline">Activity Logs</span>
+            </button>
+          )}
+
+          {/* AI Reader Button */}
+          {onOpenAIReader && (
+            <button
+              onClick={onOpenAIReader}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500/20 via-indigo-500/20 to-purple-500/20 border border-amber-500/40 text-xs font-semibold text-amber-300 hover:text-white hover:border-amber-400 transition shadow-lg group"
+              title="AI Reader: Decipher Doctor's & Handwritten Notes"
+            >
+              <Sparkles className="w-4 h-4 text-amber-400 group-hover:rotate-12 transition-transform" />
+              <span className="hidden xl:inline">AI Reader</span>
+            </button>
+          )}
 
           {/* Handwriting OCR & Transcript */}
           <button

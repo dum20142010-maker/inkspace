@@ -7,9 +7,12 @@ import { SettingsModal } from './components/modals/SettingsModal';
 import { AuthModal } from './components/auth/AuthModal';
 import { OfflineIndicator } from './components/pwa/OfflineIndicator';
 import { PdfManager } from './engine/pdfManager';
+import { auth, googleProvider, signInWithPopup, onAuthStateChanged, FirebaseUser } from './utils/firebase';
 
 export default function App() {
   const [isInitialized, setIsInitialized] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [viewState, setViewState] = useState<'dashboard' | 'editor'>('dashboard');
   const [activeNotebookId, setActiveNotebookId] = useState<string | null>(null);
 
@@ -58,26 +61,16 @@ export default function App() {
     const loadedFolders = await db.folders.orderBy('createdAt').toArray();
     const settingsObj = await db.settings.get('user_settings');
 
-    // Restore authenticated user session
-    const savedUserId = localStorage.getItem('seen_active_user_id') || sessionStorage.getItem('seen_active_user_id');
-    if (savedUserId) {
-      const user = await db.users.get(savedUserId);
-      if (user) {
-        setCurrentUser(user);
-      } else {
-        const firstUser = await db.users.toCollection().first();
-        if (firstUser) {
-          setCurrentUser(firstUser);
-          localStorage.setItem('seen_active_user_id', firstUser.id);
-        }
-      }
-    } else {
-      // Default to demo user so the app has an active authenticated session
-      const firstUser = await db.users.toCollection().first();
-      if (firstUser) {
-        setCurrentUser(firstUser);
-        localStorage.setItem('seen_active_user_id', firstUser.id);
-      }
+    const activeUserId = localStorage.getItem('seen_active_user_id') || sessionStorage.getItem('seen_active_user_id');
+    let loadedUser: User | undefined;
+    if (activeUserId) {
+      loadedUser = await db.users.get(activeUserId);
+    }
+    if (!loadedUser) {
+      loadedUser = await db.users.toCollection().first();
+    }
+    if (loadedUser) {
+      setCurrentUser(loadedUser);
     }
 
     setNotebooks(loadedNotebooks);
@@ -87,8 +80,23 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    loadAppData();
+    const unsubscribe = onAuthStateChanged(auth, (user: FirebaseUser | null) => {
+      setFirebaseUser(user);
+      setAuthLoading(false);
+      if (user) {
+        loadAppData();
+      }
+    });
+    return () => unsubscribe();
   }, [loadAppData]);
+
+  const handleFirebaseSignIn = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (err) {
+      console.error('Firebase Google sign-in error:', err);
+    }
+  };
 
   /**
    * Auth Handlers
@@ -234,7 +242,7 @@ export default function App() {
   };
 
   /**
-   * Folder Creation
+   * Folder Operations
    */
   const handleCreateFolder = async (name: string) => {
     await db.folders.add({
@@ -243,6 +251,32 @@ export default function App() {
       color: '#6366f1',
       createdAt: Date.now()
     });
+    await loadAppData();
+  };
+
+  const handleMoveNotebookToFolder = async (notebookId: string, folderId: string | null) => {
+    await db.notebooks.update(notebookId, { folderId, updatedAt: Date.now() });
+    try {
+      const nb = await db.notebooks.get(notebookId);
+      if (nb) {
+        fetch('/api/notebooks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(nb)
+        }).catch(() => {});
+      }
+    } catch (e) {
+      // Ignore sync error
+    }
+    await loadAppData();
+  };
+
+  const handleDeleteFolder = async (folderId: string) => {
+    await db.folders.delete(folderId);
+    const inFolder = await db.notebooks.where('folderId').equals(folderId).toArray();
+    for (const nb of inFolder) {
+      await db.notebooks.update(nb.id, { folderId: null });
+    }
     await loadAppData();
   };
 
@@ -287,6 +321,45 @@ export default function App() {
 
   const activeNotebook = notebooks.find(n => n.id === activeNotebookId);
 
+  if (authLoading) {
+    return (
+      <div className="h-screen w-screen bg-slate-950 flex flex-col items-center justify-center text-slate-100">
+        <div className="h-12 w-12 rounded-2xl bg-amber-400 flex items-center justify-center shadow-2xl shadow-amber-500/30 animate-pulse mb-4 text-slate-950 font-black font-serif text-2xl">
+          I
+        </div>
+        <p className="text-sm font-bold text-slate-300">Authenticating with Firebase...</p>
+      </div>
+    );
+  }
+
+  if (!firebaseUser) {
+    return (
+      <div className="h-screen w-screen bg-slate-950 flex flex-col items-center justify-center text-slate-100 p-4">
+        <div className="w-full max-w-md rounded-3xl bg-slate-900 border border-slate-800 p-8 shadow-2xl text-center">
+          <div className="h-16 w-16 mx-auto rounded-3xl bg-amber-400 flex items-center justify-center shadow-2xl shadow-amber-500/30 mb-6 text-slate-950 font-black font-serif text-3xl">
+            I
+          </div>
+          <h1 className="text-2xl font-black text-white tracking-tight mb-2">Welcome to InkSpace</h1>
+          <p className="text-xs text-slate-400 mb-8 leading-relaxed">
+            Please sign in with Firebase (Google) to access your notebooks and cloud workspace. Subsequent visits will log you in automatically.
+          </p>
+          <button
+            onClick={handleFirebaseSignIn}
+            className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-2xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-sm shadow-xl transition active:scale-95"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
+              <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.13 0-5.78-2.11-6.73-4.96H1.2v3.15C3.21 21.32 7.27 24 12 24z"/>
+              <path fill="#FBBC05" d="M5.27 14.24c-.25-.72-.39-1.49-.39-2.24s.14-1.52.39-2.24V6.6H1.2C.44 8.13 0 9.87 0 12s.44 3.87 1.2 5.4l4.07-3.16z"/>
+              <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.27 0 3.21 2.68 1.2 6.6l4.07 3.15c.95-2.85 3.6-4.96 6.73-4.96z"/>
+            </svg>
+            <span>Sign in with Google</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!isInitialized || !toolSettings) {
     return (
       <div className="h-screen w-screen bg-slate-950 flex flex-col items-center justify-center text-slate-100">
@@ -323,6 +396,8 @@ export default function App() {
           onDuplicateNotebook={handleDuplicateNotebook}
           onRenameNotebook={handleRenameNotebook}
           onCreateFolder={handleCreateFolder}
+          onMoveNotebookToFolder={handleMoveNotebookToFolder}
+          onDeleteFolder={handleDeleteFolder}
           onRestoreFromTrash={async id => {
             await db.notebooks.update(id, { isDeleted: false });
             await loadAppData();

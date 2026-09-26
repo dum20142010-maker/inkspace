@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { User } from '../../types/notebook';
 import {
   X,
@@ -14,7 +14,10 @@ import {
   FileText,
   Upload,
   Trash2,
-  Camera
+  Camera,
+  Copy,
+  Check,
+  AtSign
 } from 'lucide-react';
 
 interface UserProfileModalProps {
@@ -53,10 +56,42 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     currentUser.emailVisibility || 'public'
   );
 
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [usernameStatus, setUsernameStatus] = useState<{
+    checking: boolean;
+    available: boolean | null;
+    message: string | null;
+  }>({ checking: false, available: null, message: null });
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    const clean = username.replace(/^@/, '').trim().toLowerCase();
+    if (!clean || clean === currentUser.username.toLowerCase()) {
+      setUsernameStatus({ checking: false, available: true, message: null });
+      return;
+    }
+
+    setUsernameStatus({ checking: true, available: null, message: 'Checking availability...' });
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/users/check-username?username=${encodeURIComponent(clean)}&excludeUserId=${currentUser.id}`).then(r => r.json());
+        if (res.available) {
+          setUsernameStatus({ checking: false, available: true, message: `✓ @${clean} is available!` });
+        } else {
+          setUsernameStatus({ checking: false, available: false, message: `❌ @${clean} is already taken.` });
+        }
+      } catch (err) {
+        setUsernameStatus({ checking: false, available: null, message: null });
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [username, currentUser]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -73,6 +108,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+
+    if (usernameStatus.available === false) {
+      setErrorMsg('Username is already taken by another user.');
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -228,6 +269,28 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             </div>
           </div>
 
+          {/* Creative 6-Digit Friend / Collab Code */}
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">Your Creative 6-Digit Friend Code</p>
+              <p className="font-mono text-lg font-extrabold tracking-widest text-amber-300 mt-0.5">
+                {currentUser.collabCode || '849201'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard.writeText(currentUser.collabCode || '849201');
+                setCopiedCode(true);
+                setTimeout(() => setCopiedCode(false), 2000);
+              }}
+              className="px-3 py-1.5 rounded-xl bg-amber-400/20 hover:bg-amber-400/30 border border-amber-400/40 text-amber-300 font-semibold text-xs flex items-center gap-1.5 transition"
+            >
+              {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copiedCode ? 'Copied' : 'Copy Code'}</span>
+            </button>
+          </div>
+
           {/* Display Name & Handle */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -241,7 +304,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Username Handle</label>
+              <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center justify-between">
+                <span>Username Handle</span>
+                <span className="text-[10px] text-amber-400 font-normal">Must be unique</span>
+              </label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-500 font-mono">@</span>
                 <input
@@ -249,9 +315,28 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   required
                   value={username}
                   onChange={e => setUsername(e.target.value)}
-                  className="w-full rounded-xl bg-[#111622] border border-slate-800 pl-7 pr-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-400"
+                  className={`w-full rounded-xl bg-[#111622] border pl-7 pr-3 py-2 text-xs font-mono text-white focus:outline-none ${
+                    usernameStatus.available === true
+                      ? 'border-emerald-500'
+                      : usernameStatus.available === false
+                      ? 'border-rose-500'
+                      : 'border-slate-800 focus:border-amber-400'
+                  }`}
                 />
               </div>
+              {usernameStatus.message && (
+                <p
+                  className={`text-[10px] font-medium mt-1 ${
+                    usernameStatus.available === true
+                      ? 'text-emerald-400'
+                      : usernameStatus.available === false
+                      ? 'text-rose-400 font-semibold'
+                      : 'text-slate-400'
+                  }`}
+                >
+                  {usernameStatus.message}
+                </p>
+              )}
             </div>
           </div>
 
